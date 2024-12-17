@@ -1,5 +1,6 @@
 const cloudinary = require("../middleware/cloudinary");
 const Recipe = require("../models/Recipe");
+const Favorite = require("../models/Favorite");
 
 module.exports = {
   getProfile: async (req, res) => {
@@ -7,44 +8,60 @@ module.exports = {
       //Since we have a session each request (req) contains the user logged-in info: req.user
       //console.log(req.user) to see everything
       //Grabbing just the post of the logged-in user
-      const posts = await Recipe.find({ user: req.user.id });
+      const recipes = await Recipe.find({ user: req.user.id });
       //Sending post data from mongodb and user data to ejs template
-      res.render("profile.ejs", { posts: posts, user: req.user });
+      res.render("profile.ejs", { recipes: recipes, user: req.user });
+    } catch (err) {
+      console.log(err);
+    }
+  },
+  getFavorites: async (req, res) => {
+    try {
+      //Since we have a session each request (req) contains the user logged-in info: req.user
+      //console.log(req.user) to see everything
+      //Grabbing just the post of the logged-in user
+      const recipes = await Favorite.find({ user: req.user.id }).populate('recipe');
+
+      console.log(recipes)
+
+      //Sending post data from mongodb and user data to ejs template
+      res.render("favorites.ejs", { recipes: recipes, user: req.user });
     } catch (err) {
       console.log(err);
     }
   },
   //remove get feed if you want
-  getFeed: async (req, res) => {
-    try {
-      const posts = await Recipe.find().sort({ createdAt: "desc" }).lean();
-      res.render("feed.ejs", { posts: posts });
-    } catch (err) {
-      console.log(err);
-    }
-  },
-  getPost: async (req, res) => {
+  // getFeed: async (req, res) => {
+  //   try {
+  //     const posts = await Recipe.find().sort({ createdAt: "desc" }).lean();
+  //     res.render("feed.ejs", { posts: posts });
+  //   } catch (err) {
+  //     console.log(err);
+  //   }
+  // },
+  getRecipe: async (req, res) => {
     try {
       //id parameter comes from the post routes
-     // router.get("/:id", ensureAuth, postsController.getPost);
-     //This takes id from URL 
-      const post = await Recipe.findById(req.params.id);
-      res.render("post.ejs", { post: post, user: req.user });
+      // router.get("/:id", ensureAuth, postsController.getPost);
+      //This takes id from URL
+      const recipe = await Recipe.findById(req.params.id);
+      res.render("recipe.ejs", { recipe: recipe, user: req.user });
     } catch (err) {
       console.log(err);
     }
   },
-  createPost: async (req, res) => {
+  createRecipe: async (req, res) => {
     try {
       // Upload image to cloudinary
       const result = await cloudinary.uploader.upload(req.file.path);
-     
+
       //media is stored in cloudinary - the above request responds with url to media and the media id that you will need when deleting content.
       await Recipe.create({
-        title: req.body.title,
+        name: req.body.name,
         image: result.secure_url,
         cloudinaryId: result.public_id,
-        caption: req.body.caption,
+        ingredients: req.body.ingredients,
+        directions: req.body.directions,
         likes: 0,
         user: req.user.id,
       });
@@ -54,7 +71,23 @@ module.exports = {
       console.log(err);
     }
   },
-  likePost: async (req, res) => {
+
+  favoriteRecipe: async (req, res) => {
+    try {
+      // Upload image to cloudinary
+      //media is stored in cloudinary - the above request responds with url to media and the media id that you will need when deleting content.
+      await Favorite.create({
+        user: req.user.id,
+        recipe: req.params.id,
+      });
+      console.log("Favorite has been added!");
+      res.redirect(`/recipe/${req.params.id}`);
+    } catch (err) {
+      console.log(err);
+    }
+  },
+
+  likeRecipe: async (req, res) => {
     try {
       await Recipe.findOneAndUpdate(
         { _id: req.params.id },
@@ -63,12 +96,12 @@ module.exports = {
         }
       );
       console.log("Likes +1");
-      res.redirect(`/post/${req.params.id}`);
+      res.redirect(`/recipe/${req.params.id}`);
     } catch (err) {
       console.log(err);
     }
   },
-  deletePost: async (req, res) => {
+  deleteRecipe: async (req, res) => {
     try {
       // Find post by id
       let recipe = await Recipe.findById({ _id: req.params.id });
@@ -76,7 +109,7 @@ module.exports = {
       await cloudinary.uploader.destroy(recipe.cloudinaryId);
       // Delete post from db
       await Recipe.remove({ _id: req.params.id });
-      console.log("Deleted Post");
+      console.log("Deleted Recipe");
       res.redirect("/profile");
     } catch (err) {
       res.redirect("/profile");
